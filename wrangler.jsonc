@@ -2,6 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "webbit",
   "compatibility_date": "2026-05-31",
+  "keep_vars": true,
   "assets": {
     "directory": "./dist",
     "not_found_handling": "single-page-application"
