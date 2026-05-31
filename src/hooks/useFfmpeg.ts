@@ -73,8 +73,10 @@ export function useFfmpeg() {
           await ffmpeg.writeFile(audioName, await fetchFile(audio));
           args.push("-i", audioName);
         }
-        // -b:v 0 puts libvpx in constant-quality (CRF) mode; yuva420p preserves PNG alpha.
-        args.push("-c:v", vcodec, "-crf", crf, "-b:v", "0", "-pix_fmt", "yuva420p");
+        // -b:v 0 puts libvpx in constant-quality (CRF) mode. yuv420p (not yuva420p): libvpx
+        // forces auto_alt_ref on, which it refuses to combine with alpha ("Transparency
+        // encoding with auto_alt_ref does not work"), so encoder init fails. Flatten alpha.
+        args.push("-c:v", vcodec, "-crf", crf, "-b:v", "0", "-pix_fmt", "yuv420p");
         if (audio) args.push("-c:a", "libopus", "-shortest");
         args.push("out.webm");
 
