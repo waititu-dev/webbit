@@ -21,7 +21,9 @@ export function useFfmpeg() {
     const ffmpeg = new FFmpeg();
     ffmpeg.on("progress", ({ progress }) => setProgress(Math.min(1, Math.max(0, progress))));
     // ffmpeg-core.wasm is ~32 MB, over Cloudflare's 25 MiB static-asset limit, so load from a CDN.
-    const base = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd";
+    // ESM build (not UMD): Vite bundles ffmpeg's worker as a module worker, where only the ESM
+    // core's `export default` resolves under dynamic import — UMD fails with "failed to import".
+    const base = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm";
     await ffmpeg.load({
       coreURL: await toBlobURL(`${base}/ffmpeg-core.js`, "text/javascript"),
       wasmURL: await toBlobURL(`${base}/ffmpeg-core.wasm`, "application/wasm"),
@@ -69,6 +71,7 @@ export function useFfmpeg() {
         setStatus("idle");
         return new Blob([data as BlobPart], { type: "image/webp" });
       } catch (e) {
+        console.error("[webbit] encode failed:", e);
         setStatus("error");
         throw e;
       }
@@ -94,6 +97,7 @@ export function useFfmpeg() {
         setStatus("idle");
         return new Blob([data as BlobPart], { type: "image/gif" });
       } catch (e) {
+        console.error("[webbit] encode failed:", e);
         setStatus("error");
         throw e;
       }
