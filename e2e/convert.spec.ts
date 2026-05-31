@@ -2,15 +2,16 @@ import { test, expect } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { solidPng } from "./png";
+import { rgbaPng } from "./png";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// Semi-transparent frames (alpha < 255) so the encoder actually exercises the alpha path.
 const frames = [
-  { name: "frame_001.png", mimeType: "image/png", buffer: solidPng(32, [220, 40, 40]) },
-  { name: "frame_002.png", mimeType: "image/png", buffer: solidPng(32, [40, 200, 80]) },
-  { name: "frame_003.png", mimeType: "image/png", buffer: solidPng(32, [40, 80, 220]) },
-  { name: "frame_004.png", mimeType: "image/png", buffer: solidPng(32, [230, 200, 40]) },
+  { name: "frame_001.png", mimeType: "image/png", buffer: rgbaPng(32, [220, 40, 40, 128]) },
+  { name: "frame_002.png", mimeType: "image/png", buffer: rgbaPng(32, [40, 200, 80, 128]) },
+  { name: "frame_003.png", mimeType: "image/png", buffer: rgbaPng(32, [40, 80, 220, 128]) },
+  { name: "frame_004.png", mimeType: "image/png", buffer: rgbaPng(32, [230, 200, 40, 128]) },
 ];
 
 // Local ffmpeg-core ESM build — works in module workers (app uses {type:"module"} workers).

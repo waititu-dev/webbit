@@ -36,3 +36,17 @@ export function solidPng(size: number, rgb: [number, number, number]): Buffer {
   const raw = Buffer.concat(Array(size).fill(row));
   return Buffer.concat([sig, chunk("IHDR", ihdr), chunk("IDAT", deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]);
 }
+
+// Like solidPng but RGBA (color type 6) with a per-pixel alpha, so alpha < 255
+// genuinely exercises the encoder's transparency path.
+export function rgbaPng(size: number, rgba: [number, number, number, number]): Buffer {
+  const sig = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(size, 0);
+  ihdr.writeUInt32BE(size, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 6;
+  const row = Buffer.concat([Buffer.from([0]), ...Array(size).fill(Buffer.from(rgba))]);
+  const raw = Buffer.concat(Array(size).fill(row));
+  return Buffer.concat([sig, chunk("IHDR", ihdr), chunk("IDAT", deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]);
+}

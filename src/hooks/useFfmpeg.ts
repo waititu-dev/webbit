@@ -73,10 +73,18 @@ export function useFfmpeg() {
           await ffmpeg.writeFile(audioName, await fetchFile(audio));
           args.push("-i", audioName);
         }
-        // -b:v 0 puts libvpx in constant-quality (CRF) mode. yuv420p (not yuva420p): libvpx
-        // forces auto_alt_ref on, which it refuses to combine with alpha ("Transparency
-        // encoding with auto_alt_ref does not work"), so encoder init fails. Flatten alpha.
-        args.push("-c:v", vcodec, "-crf", crf, "-b:v", "0", "-pix_fmt", "yuv420p");
+        // -b:v 0 puts libvpx in constant-quality (CRF) mode. yuva420p keeps the alpha channel
+        // so transparent PNG sequences stay transparent.
+        // -auto-alt-ref 0: libvpx defaults alt-ref frames on for VP9, but alt-ref frames can't
+        // carry alpha, so VP9 aborts with "Transparency encoding with auto_alt_ref does not
+        // work" unless we disable them. VP8's libvpx in this wasm core can't mux alpha
+        // (yuva420p aborts the core during finalization), so VP8 flattens to yuv420p.
+        args.push("-c:v", vcodec, "-crf", crf, "-b:v", "0");
+        if (s.codec === "vp8") {
+          args.push("-pix_fmt", "yuv420p");
+        } else {
+          args.push("-auto-alt-ref", "0", "-pix_fmt", "yuva420p");
+        }
         if (audio) args.push("-c:a", "libopus", "-shortest");
         args.push("out.webm");
 
