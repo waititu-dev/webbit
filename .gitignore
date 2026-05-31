@@ -12,3 +12,7 @@ screenshots/
 .wrangler
 .dev.vars*
 .env*
+
+# Playwright
+test-results/
+playwright-report/
