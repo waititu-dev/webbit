@@ -12,3 +12,6 @@ screenshots/
 .wrangler
 .dev.vars*
 .env*
+
+# ffmpeg core is copied from node_modules at build time, never committed
+public/ffmpeg/
