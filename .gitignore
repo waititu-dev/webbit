@@ -7,3 +7,8 @@ dist
 Claude stuff/
 screenshots/
 *.verify.png
+
+# Wrangler / local env
+.wrangler
+.dev.vars*
+.env*
