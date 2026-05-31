@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Dropzone } from "./Dropzone";
 
@@ -15,12 +15,11 @@ describe("Dropzone", () => {
     expect(onFiles.mock.calls[0][0].map((f: File) => f.name)).toEqual(["frame_1.png", "frame_2.png"]);
   });
 
-  it("reports rejected non-PNG names via onReject", async () => {
+  it("reports rejected non-PNG names via onReject on drop", () => {
     const onReject = vi.fn();
     render(<Dropzone onFiles={() => {}} onReject={onReject} />);
-    const input = screen.getByTestId("file-input") as HTMLInputElement;
     const jpg = new File([new Uint8Array()], "bad.jpg", { type: "image/jpeg" });
-    await userEvent.upload(input, [jpg]);
+    fireEvent.drop(screen.getByText(/drop your png/i), { dataTransfer: { files: [jpg] } });
     expect(onReject).toHaveBeenCalledWith(["bad.jpg"]);
   });
 });

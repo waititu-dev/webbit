@@ -41,6 +41,7 @@ export function Dropzone({ onFiles, onReject }: Props) {
         ref={inputRef}
         data-testid="file-input"
         type="file"
+        accept="image/png"
         multiple
         className="hidden"
         onChange={(e) => handle(e.target.files)}
