@@ -20,7 +20,8 @@ export function useFfmpeg() {
     setStatus("loading");
     const ffmpeg = new FFmpeg();
     ffmpeg.on("progress", ({ progress }) => setProgress(Math.min(1, Math.max(0, progress))));
-    const base = `${import.meta.env.BASE_URL}ffmpeg`;
+    // ffmpeg-core.wasm is ~32 MB, over Cloudflare's 25 MiB static-asset limit, so load from a CDN.
+    const base = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd";
     await ffmpeg.load({
       coreURL: await toBlobURL(`${base}/ffmpeg-core.js`, "text/javascript"),
       wasmURL: await toBlobURL(`${base}/ffmpeg-core.wasm`, "application/wasm"),
