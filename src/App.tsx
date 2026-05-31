@@ -22,7 +22,7 @@ export default function App() {
     <main className="mx-auto max-w-3xl space-y-8 px-6 py-12">
       <header>
         <h1 className="text-3xl font-bold tracking-tight text-zinc-900">Webbit</h1>
-        <p className="text-zinc-500">Turn a PNG sequence into an animated WebP — right in your browser.</p>
+        <p className="text-zinc-500">Turn a PNG sequence into a WebM video — right in your browser.</p>
       </header>
 
       <Dropzone onFiles={setFiles} onReject={setRejected} />

@@ -17,7 +17,7 @@ const frames = [
 // UMD build would silently produce undefined .default under dynamic import.
 const ffmpegCoreEsmDir = path.resolve(__dirname, "../node_modules/@ffmpeg/core/dist/esm");
 
-test("converts a PNG sequence to animated WebP and GIF", async ({ page }) => {
+async function serveLocalCore(page: import("@playwright/test").Page) {
   // Serve local ffmpeg-core files instead of CDN to avoid network dependency.
   // Must be the ESM build because the app's Vite bundle creates module workers.
   await page.route("**/cdn.jsdelivr.net/npm/@ffmpeg/core**/ffmpeg-core.js", async (route) => {
@@ -36,26 +36,43 @@ test("converts a PNG sequence to animated WebP and GIF", async ({ page }) => {
       body: readFileSync(path.join(ffmpegCoreEsmDir, "ffmpeg-core.wasm")),
     });
   });
+}
+
+const EBML = [0x1a, 0x45, 0xdf, 0xa3];
+
+test("converts a PNG sequence to WebM (VP9)", async ({ page }) => {
+  test.setTimeout(180_000);
+  await serveLocalCore(page);
 
   await page.goto("/");
   await page.getByTestId("file-input").setInputFiles(frames);
-  await expect(page.getByRole("button", { name: /Download WebP/i })).toBeEnabled();
+  await expect(page.getByRole("button", { name: /Download WebM/i })).toBeEnabled();
 
-  const [webp] = await Promise.all([
-    page.waitForEvent("download", { timeout: 150_000 }),
-    page.getByRole("button", { name: /Download WebP/i }).click(),
+  const [download] = await Promise.all([
+    page.waitForEvent("download", { timeout: 180_000 }),
+    page.getByRole("button", { name: /Download WebM/i }).click(),
   ]);
-  const webpBuf = readFileSync((await webp.path())!);
-  console.log("WebP size:", webpBuf.length, "bytes");
-  expect(webpBuf.length).toBeGreaterThan(100);
-  expect(webpBuf.subarray(0, 4).toString("ascii")).toBe("RIFF");
-  expect(webpBuf.subarray(8, 12).toString("ascii")).toBe("WEBP");
+  const buf = readFileSync((await download.path())!);
+  console.log("WebM (VP9) size:", buf.length, "bytes");
+  expect(buf.length).toBeGreaterThan(100);
+  expect([...buf.subarray(0, 4)]).toEqual(EBML);
+});
 
-  const [gif] = await Promise.all([
-    page.waitForEvent("download", { timeout: 150_000 }),
-    page.getByRole("button", { name: /Download GIF/i }).click(),
+test("converts a PNG sequence to WebM (VP8)", async ({ page }) => {
+  test.setTimeout(180_000);
+  await serveLocalCore(page);
+
+  await page.goto("/");
+  await page.getByTestId("file-input").setInputFiles(frames);
+  await page.getByRole("button", { name: /VP8/i }).click();
+  await expect(page.getByRole("button", { name: /Download WebM/i })).toBeEnabled();
+
+  const [download] = await Promise.all([
+    page.waitForEvent("download", { timeout: 180_000 }),
+    page.getByRole("button", { name: /Download WebM/i }).click(),
   ]);
-  const gifBuf = readFileSync((await gif.path())!);
-  console.log("GIF size:", gifBuf.length, "bytes");
-  expect(gifBuf.subarray(0, 6).toString("ascii")).toMatch(/^GIF8[79]a$/);
+  const buf = readFileSync((await download.path())!);
+  console.log("WebM (VP8) size:", buf.length, "bytes");
+  expect(buf.length).toBeGreaterThan(100);
+  expect([...buf.subarray(0, 4)]).toEqual(EBML);
 });

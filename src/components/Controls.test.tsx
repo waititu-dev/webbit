@@ -14,8 +14,10 @@ describe("Controls", () => {
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ fps: 30 }));
   });
 
-  it("disables the quality slider when lossless is on", () => {
-    render(<Controls settings={{ ...DEFAULT_SETTINGS, lossless: true }} onChange={() => {}} />);
-    expect(screen.getByLabelText(/quality/i)).toBeDisabled();
+  it("emits codec changes", async () => {
+    const onChange = vi.fn();
+    render(<Controls settings={DEFAULT_SETTINGS} onChange={onChange} />);
+    await userEvent.click(screen.getByRole("button", { name: /VP8/i }));
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ codec: "vp8" }));
   });
 });

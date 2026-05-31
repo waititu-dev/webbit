@@ -5,10 +5,15 @@ import type { Settings } from "../types";
 import { clampFps } from "../lib/timing";
 
 const pad = (n: number) => String(n).padStart(4, "0");
+const AUDIO_IN = "audio_in";
 const isLeftover = (name: string) =>
-  /^in_\d+\.png$/.test(name) || name === "palette.png" || name === "out.webp" || name === "out.gif";
+  /^in_\d+\.png$/.test(name) || name === "out.webm" || name.startsWith(`${AUDIO_IN}.`);
 
 export type EncodeStatus = "idle" | "loading" | "encoding" | "error";
+
+// 0–100 Quality slider → VP8/VP9 CRF (lower = better quality).
+const qualityToCrf = (quality: number) =>
+  Math.round(63 - (Math.min(100, Math.max(0, quality)) / 100) * 53);
 
 export function useFfmpeg() {
   const ffmpegRef = useRef<FFmpeg | null>(null);
@@ -32,8 +37,7 @@ export function useFfmpeg() {
     return ffmpeg;
   }, []);
 
-  // Each encode reads in_%04d.png contiguously, so leftover frames from a
-  // previous (longer) sequence would be silently included. Wipe them first.
+  // Wipe leftover inputs/outputs so a previous (longer) sequence isn't silently reused.
   const resetFs = useCallback(async (ffmpeg: FFmpeg) => {
     const entries = await ffmpeg.listDir("/");
     await Promise.all(
@@ -49,27 +53,35 @@ export function useFfmpeg() {
     }
   }, []);
 
-  const encodeWebp = useCallback(
-    async (files: File[], s: Settings): Promise<Blob> => {
+  const encodeWebm = useCallback(
+    async (files: File[], s: Settings, audio?: File | null): Promise<Blob> => {
       try {
         const ffmpeg = await ensureLoaded();
         setStatus("encoding");
         setProgress(0);
         await resetFs(ffmpeg);
         await writeFrames(ffmpeg, files);
+
         const fps = String(clampFps(s.fps));
-        const quality = s.lossless
-          ? ["-lossless", "1"]
-          : ["-lossless", "0", "-q:v", String(s.quality)];
-        await ffmpeg.exec([
-          "-framerate", fps, "-i", "in_%04d.png",
-          "-c:v", "libwebp", "-loop", "0",
-          ...quality,
-          "out.webp",
-        ]);
-        const data = await ffmpeg.readFile("out.webp");
+        const crf = String(qualityToCrf(s.quality));
+        const vcodec = s.codec === "vp8" ? "libvpx" : "libvpx-vp9";
+
+        const args = ["-framerate", fps, "-i", "in_%04d.png"];
+        if (audio) {
+          const ext = audio.name.includes(".") ? audio.name.split(".").pop()! : "bin";
+          const audioName = `${AUDIO_IN}.${ext}`;
+          await ffmpeg.writeFile(audioName, await fetchFile(audio));
+          args.push("-i", audioName);
+        }
+        // -b:v 0 puts libvpx in constant-quality (CRF) mode; yuva420p preserves PNG alpha.
+        args.push("-c:v", vcodec, "-crf", crf, "-b:v", "0", "-pix_fmt", "yuva420p");
+        if (audio) args.push("-c:a", "libopus", "-shortest");
+        args.push("out.webm");
+
+        await ffmpeg.exec(args);
+        const data = await ffmpeg.readFile("out.webm");
         setStatus("idle");
-        return new Blob([data as BlobPart], { type: "image/webp" });
+        return new Blob([data as BlobPart], { type: "video/webm" });
       } catch (e) {
         console.error("[webbit] encode failed:", e);
         setStatus("error");
@@ -79,31 +91,5 @@ export function useFfmpeg() {
     [ensureLoaded, resetFs, writeFrames],
   );
 
-  const encodeGif = useCallback(
-    async (files: File[], s: Settings): Promise<Blob> => {
-      try {
-        const ffmpeg = await ensureLoaded();
-        setStatus("encoding");
-        setProgress(0);
-        await resetFs(ffmpeg);
-        await writeFrames(ffmpeg, files);
-        const fps = String(clampFps(s.fps));
-        await ffmpeg.exec(["-i", "in_%04d.png", "-vf", `fps=${fps},palettegen`, "palette.png"]);
-        await ffmpeg.exec([
-          "-framerate", fps, "-i", "in_%04d.png", "-i", "palette.png",
-          "-lavfi", `fps=${fps}[x];[x][1:v]paletteuse`, "-loop", "0", "out.gif",
-        ]);
-        const data = await ffmpeg.readFile("out.gif");
-        setStatus("idle");
-        return new Blob([data as BlobPart], { type: "image/gif" });
-      } catch (e) {
-        console.error("[webbit] encode failed:", e);
-        setStatus("error");
-        throw e;
-      }
-    },
-    [ensureLoaded, resetFs, writeFrames],
-  );
-
-  return { encodeWebp, encodeGif, progress, status };
+  return { encodeWebm, progress, status };
 }
