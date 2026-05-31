@@ -11,9 +11,11 @@ const isLeftover = (name: string) =>
 
 export type EncodeStatus = "idle" | "loading" | "encoding" | "error";
 
+const MAX_CRF = 63; // libvpx CRF ceiling = worst quality
+const MIN_CRF = 10; // best quality we expose
 // 0–100 Quality slider → VP8/VP9 CRF (lower = better quality).
 const qualityToCrf = (quality: number) =>
-  Math.round(63 - (Math.min(100, Math.max(0, quality)) / 100) * 53);
+  Math.round(MAX_CRF - (Math.min(100, Math.max(0, quality)) / 100) * (MAX_CRF - MIN_CRF));
 
 export function useFfmpeg() {
   const ffmpegRef = useRef<FFmpeg | null>(null);
@@ -68,7 +70,7 @@ export function useFfmpeg() {
 
         const args = ["-framerate", fps, "-i", "in_%04d.png"];
         if (audio) {
-          const ext = audio.name.includes(".") ? audio.name.split(".").pop()! : "bin";
+          const ext = audio.name.split(".").pop() || "bin";
           const audioName = `${AUDIO_IN}.${ext}`;
           await ffmpeg.writeFile(audioName, await fetchFile(audio));
           args.push("-i", audioName);
