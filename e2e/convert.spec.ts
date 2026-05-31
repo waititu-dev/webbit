@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -18,7 +18,7 @@ const frames = [
 // UMD build would silently produce undefined .default under dynamic import.
 const ffmpegCoreEsmDir = path.resolve(__dirname, "../node_modules/@ffmpeg/core/dist/esm");
 
-async function serveLocalCore(page: import("@playwright/test").Page) {
+async function serveLocalCore(page: Page) {
   // Serve local ffmpeg-core files instead of CDN to avoid network dependency.
   // Must be the ESM build because the app's Vite bundle creates module workers.
   await page.route("**/cdn.jsdelivr.net/npm/@ffmpeg/core**/ffmpeg-core.js", async (route) => {
@@ -41,19 +41,28 @@ async function serveLocalCore(page: import("@playwright/test").Page) {
 
 const EBML = [0x1a, 0x45, 0xdf, 0xa3];
 
-test("converts a PNG sequence to WebM (VP9)", async ({ page }) => {
-  test.setTimeout(180_000);
+// Drive the UI through a full PNG-sequence → WebM export and return the downloaded bytes.
+// vp8: true clicks the VP8 codec toggle first; otherwise the default (VP9) is used.
+async function exportWebm(page: Page, opts: { vp8?: boolean } = {}): Promise<Buffer> {
   await serveLocalCore(page);
 
   await page.goto("/");
   await page.getByTestId("file-input").setInputFiles(frames);
+  if (opts.vp8) {
+    await page.getByRole("button", { name: /VP8/i }).click();
+  }
   await expect(page.getByRole("button", { name: /Download WebM/i })).toBeEnabled();
 
   const [download] = await Promise.all([
     page.waitForEvent("download", { timeout: 180_000 }),
     page.getByRole("button", { name: /Download WebM/i }).click(),
   ]);
-  const buf = readFileSync((await download.path())!);
+  return readFileSync((await download.path())!);
+}
+
+test("converts a PNG sequence to WebM (VP9)", async ({ page }) => {
+  test.setTimeout(180_000);
+  const buf = await exportWebm(page);
   console.log("WebM (VP9) size:", buf.length, "bytes");
   expect(buf.length).toBeGreaterThan(100);
   expect([...buf.subarray(0, 4)]).toEqual(EBML);
@@ -61,18 +70,7 @@ test("converts a PNG sequence to WebM (VP9)", async ({ page }) => {
 
 test("converts a PNG sequence to WebM (VP8)", async ({ page }) => {
   test.setTimeout(180_000);
-  await serveLocalCore(page);
-
-  await page.goto("/");
-  await page.getByTestId("file-input").setInputFiles(frames);
-  await page.getByRole("button", { name: /VP8/i }).click();
-  await expect(page.getByRole("button", { name: /Download WebM/i })).toBeEnabled();
-
-  const [download] = await Promise.all([
-    page.waitForEvent("download", { timeout: 180_000 }),
-    page.getByRole("button", { name: /Download WebM/i }).click(),
-  ]);
-  const buf = readFileSync((await download.path())!);
+  const buf = await exportWebm(page, { vp8: true });
   console.log("WebM (VP8) size:", buf.length, "bytes");
   expect(buf.length).toBeGreaterThan(100);
   expect([...buf.subarray(0, 4)]).toEqual(EBML);
