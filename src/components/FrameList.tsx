@@ -22,18 +22,16 @@ export function FrameList({ frames }: Props) {
     if (el) setOverflowing(el.scrollHeight > el.clientHeight + 1);
   }, [frames, expanded]);
 
-  const collapsed = overflowing && !expanded;
-
   return (
     <div className="space-y-2">
       <p className="text-sm font-medium text-zinc-600">
         {frames.length} {frames.length === 1 ? "frame" : "frames"}
       </p>
 
-      <div className="relative">
+      <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
         <div
           ref={stripRef}
-          className={`flex flex-wrap gap-2 ${expanded ? "" : "max-h-52 overflow-hidden"}`}
+          className={`flex flex-wrap gap-2 overflow-hidden ${expanded ? "" : "max-h-52"}`}
         >
           {frames.map((frame, i) => (
             <div key={frame.url} className="relative">
@@ -48,19 +46,16 @@ export function FrameList({ frames }: Props) {
             </div>
           ))}
         </div>
-        {collapsed && (
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-white to-transparent" />
+
+        {(overflowing || expanded) && (
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            className="mt-3 text-sm font-medium text-indigo-600 hover:text-indigo-500"
+          >
+            {expanded ? "Show fewer" : "See more"}
+          </button>
         )}
       </div>
-
-      {(overflowing || expanded) && (
-        <button
-          onClick={() => setExpanded((v) => !v)}
-          className="text-sm font-medium text-indigo-600 hover:text-indigo-500"
-        >
-          {expanded ? "Show fewer" : "See more"}
-        </button>
-      )}
     </div>
   );
 }
