@@ -13,7 +13,7 @@ export type EncodeStatus = "idle" | "loading" | "encoding" | "error";
 
 const MAX_CRF = 63; // libvpx CRF ceiling = worst quality
 const MIN_CRF = 10; // best quality we expose
-// 0–100 Quality slider → VP8/VP9 CRF (lower = better quality).
+// 0–100 Quality slider → libvpx CRF (lower = better quality).
 const qualityToCrf = (quality: number) =>
   Math.round(MAX_CRF - (Math.min(100, Math.max(0, quality)) / 100) * (MAX_CRF - MIN_CRF));
 
@@ -73,7 +73,6 @@ export function useFfmpeg() {
 
         const fps = String(clampFps(s.fps));
         const crf = String(qualityToCrf(s.quality));
-        const vcodec = s.codec === "vp8" ? "libvpx" : "libvpx-vp9";
 
         const args = ["-framerate", fps, "-i", "in_%04d.png"];
         if (audio) {
@@ -82,19 +81,9 @@ export function useFfmpeg() {
           await ffmpeg.writeFile(audioName, await fetchFile(audio));
           args.push("-i", audioName);
         }
-        // -b:v 0 puts libvpx in constant-quality (CRF) mode.
-        // VP8 (the default) reliably encodes long sequences but can't mux alpha in this wasm core
-        // (yuva420p aborts during finalization), so it flattens to yuv420p.
-        // VP9 keeps alpha (yuva420p) for transparent renders, but libvpx-vp9 in this core traps
-        // (wasm "memory access out of bounds") once a sequence exceeds ~16 frames — so VP9 is only
-        // usable for short clips. -auto-alt-ref 0 is required because alt-ref frames can't carry
-        // alpha (VP9 otherwise aborts with "Transparency encoding with auto_alt_ref does not work").
-        args.push("-c:v", vcodec, "-crf", crf, "-b:v", "0");
-        if (s.codec === "vp8") {
-          args.push("-pix_fmt", "yuv420p");
-        } else {
-          args.push("-auto-alt-ref", "0", "-pix_fmt", "yuva420p");
-        }
+        // VP8 (libvpx) reliably encodes long sequences. -b:v 0 selects constant-quality (CRF) mode.
+        // Output is yuv420p (opaque): this wasm core can't mux an alpha channel.
+        args.push("-c:v", "libvpx", "-crf", crf, "-b:v", "0", "-pix_fmt", "yuv420p");
         if (audio) args.push("-c:a", "libopus", "-shortest");
         args.push("out.webm");
 
@@ -104,7 +93,7 @@ export function useFfmpeg() {
         return new Blob([data as BlobPart], { type: "video/webm" });
       } catch (e) {
         console.error("[webbit] encode failed:", e, logRef.current.join("\n"));
-        // A VP9 wasm trap leaves the worker corrupted; drop it so the next encode reloads a fresh core.
+        // A wasm trap can leave the worker corrupted; drop it so the next encode reloads a fresh core.
         try {
           ffmpegRef.current?.terminate();
         } catch {
@@ -112,11 +101,7 @@ export function useFfmpeg() {
         }
         ffmpegRef.current = null;
         setStatus("error");
-        throw new Error(
-          s.codec === "vp9"
-            ? "Transparent (VP9) export failed — in-browser VP9 can't handle sequences beyond ~16 frames. Switch the Encoder to VP8 for longer clips (VP8 drops transparency)."
-            : "Encoding failed. Please try again.",
-        );
+        throw new Error("Encoding failed. Please try again.");
       }
     },
     [ensureLoaded, resetFs, writeFrames],

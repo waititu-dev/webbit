@@ -51,26 +51,13 @@ async function downloadWebm(page: Page): Promise<Buffer> {
   return readFileSync((await download.path())!);
 }
 
-test("VP8 (default) encodes a long sequence", async ({ page }) => {
+test("encodes a PNG sequence to WebM", async ({ page }) => {
   test.setTimeout(180_000);
   await serveLocalCore(page);
   await page.goto("/");
   await page.getByTestId("file-input").setInputFiles(makeFrames(64, 60));
-  // VP8 is the default codec — do not touch the encoder toggle.
   const buf = await downloadWebm(page);
-  console.log("WebM (VP8 x60) size:", buf.length, "bytes");
-  expect(buf.length).toBeGreaterThan(100);
-  expect([...buf.subarray(0, 4)]).toEqual(EBML);
-});
-
-test("VP9 preserves alpha on a short clip", async ({ page }) => {
-  test.setTimeout(180_000);
-  await serveLocalCore(page);
-  await page.goto("/");
-  await page.getByTestId("file-input").setInputFiles(makeFrames(64, 6));
-  await page.getByRole("button", { name: /VP9/i }).click();
-  const buf = await downloadWebm(page);
-  console.log("WebM (VP9 x6) size:", buf.length, "bytes");
+  console.log("WebM (x60) size:", buf.length, "bytes");
   expect(buf.length).toBeGreaterThan(100);
   expect([...buf.subarray(0, 4)]).toEqual(EBML);
 });

@@ -13,11 +13,4 @@ describe("Controls", () => {
     await userEvent.type(fps, "30");
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ fps: 30 }));
   });
-
-  it("emits codec changes", async () => {
-    const onChange = vi.fn();
-    render(<Controls settings={DEFAULT_SETTINGS} onChange={onChange} />);
-    await userEvent.click(screen.getByRole("button", { name: /VP9/i }));
-    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ codec: "vp9" }));
-  });
 });
