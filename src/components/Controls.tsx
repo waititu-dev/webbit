@@ -7,8 +7,8 @@ interface Props {
 }
 
 const CODECS: { value: Codec; label: string; hint: string }[] = [
-  { value: "vp9", label: "VP9", hint: "best quality" },
-  { value: "vp8", label: "VP8", hint: "faster" },
+  { value: "vp8", label: "VP8", hint: "any length" },
+  { value: "vp9", label: "VP9", hint: "transparency · short clips" },
 ];
 
 export function Controls({ settings, onChange }: Props) {

@@ -17,7 +17,7 @@ describe("Controls", () => {
   it("emits codec changes", async () => {
     const onChange = vi.fn();
     render(<Controls settings={DEFAULT_SETTINGS} onChange={onChange} />);
-    await userEvent.click(screen.getByRole("button", { name: /VP8/i }));
-    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ codec: "vp8" }));
+    await userEvent.click(screen.getByRole("button", { name: /VP9/i }));
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ codec: "vp9" }));
   });
 });

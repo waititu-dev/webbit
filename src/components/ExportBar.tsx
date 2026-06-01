@@ -20,8 +20,8 @@ export function ExportBar({ files, settings }: Props) {
     try {
       const blob = await encodeWebm(files, settings, audio);
       downloadBlob(blob, "webbit.webm");
-    } catch {
-      setError("Encoding failed. Please try again.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Encoding failed. Please try again.");
     }
   }
 

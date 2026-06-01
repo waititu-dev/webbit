@@ -6,14 +6,6 @@ import { rgbaPng } from "./png";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Semi-transparent frames (alpha < 255) so the encoder actually exercises the alpha path.
-const frames = [
-  { name: "frame_001.png", mimeType: "image/png", buffer: rgbaPng(32, [220, 40, 40, 128]) },
-  { name: "frame_002.png", mimeType: "image/png", buffer: rgbaPng(32, [40, 200, 80, 128]) },
-  { name: "frame_003.png", mimeType: "image/png", buffer: rgbaPng(32, [40, 80, 220, 128]) },
-  { name: "frame_004.png", mimeType: "image/png", buffer: rgbaPng(32, [230, 200, 40, 128]) },
-];
-
 // Local ffmpeg-core ESM build — works in module workers (app uses {type:"module"} workers).
 // UMD build would silently produce undefined .default under dynamic import.
 const ffmpegCoreEsmDir = path.resolve(__dirname, "../node_modules/@ffmpeg/core/dist/esm");
@@ -41,37 +33,44 @@ async function serveLocalCore(page: Page) {
 
 const EBML = [0x1a, 0x45, 0xdf, 0xa3];
 
-// Drive the UI through a full PNG-sequence → WebM export and return the downloaded bytes.
-// vp8: true clicks the VP8 codec toggle first; otherwise the default (VP9) is used.
-async function exportWebm(page: Page, opts: { vp8?: boolean } = {}): Promise<Buffer> {
-  await serveLocalCore(page);
+// Distinct-ish semi-transparent (alpha 128) frames so the encoder exercises the alpha path.
+function makeFrames(size: number, count: number) {
+  return Array.from({ length: count }, (_, i) => ({
+    name: `frame_${String(i + 1).padStart(4, "0")}.png`,
+    mimeType: "image/png",
+    buffer: rgbaPng(size, [(i * 37) % 256, (i * 71 + 40) % 256, (i * 113 + 80) % 256, 128]),
+  }));
+}
 
-  await page.goto("/");
-  await page.getByTestId("file-input").setInputFiles(frames);
-  if (opts.vp8) {
-    await page.getByRole("button", { name: /VP8/i }).click();
-  }
+async function downloadWebm(page: Page): Promise<Buffer> {
   await expect(page.getByRole("button", { name: /Download WebM/i })).toBeEnabled();
-
   const [download] = await Promise.all([
-    page.waitForEvent("download", { timeout: 180_000 }),
+    page.waitForEvent("download", { timeout: 175_000 }),
     page.getByRole("button", { name: /Download WebM/i }).click(),
   ]);
   return readFileSync((await download.path())!);
 }
 
-test("converts a PNG sequence to WebM (VP9)", async ({ page }) => {
+test("VP8 (default) encodes a long sequence", async ({ page }) => {
   test.setTimeout(180_000);
-  const buf = await exportWebm(page);
-  console.log("WebM (VP9) size:", buf.length, "bytes");
+  await serveLocalCore(page);
+  await page.goto("/");
+  await page.getByTestId("file-input").setInputFiles(makeFrames(64, 60));
+  // VP8 is the default codec — do not touch the encoder toggle.
+  const buf = await downloadWebm(page);
+  console.log("WebM (VP8 x60) size:", buf.length, "bytes");
   expect(buf.length).toBeGreaterThan(100);
   expect([...buf.subarray(0, 4)]).toEqual(EBML);
 });
 
-test("converts a PNG sequence to WebM (VP8)", async ({ page }) => {
+test("VP9 preserves alpha on a short clip", async ({ page }) => {
   test.setTimeout(180_000);
-  const buf = await exportWebm(page, { vp8: true });
-  console.log("WebM (VP8) size:", buf.length, "bytes");
+  await serveLocalCore(page);
+  await page.goto("/");
+  await page.getByTestId("file-input").setInputFiles(makeFrames(64, 6));
+  await page.getByRole("button", { name: /VP9/i }).click();
+  const buf = await downloadWebm(page);
+  console.log("WebM (VP9 x6) size:", buf.length, "bytes");
   expect(buf.length).toBeGreaterThan(100);
   expect([...buf.subarray(0, 4)]).toEqual(EBML);
 });

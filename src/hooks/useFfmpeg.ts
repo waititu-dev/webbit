@@ -19,6 +19,7 @@ const qualityToCrf = (quality: number) =>
 
 export function useFfmpeg() {
   const ffmpegRef = useRef<FFmpeg | null>(null);
+  const logRef = useRef<string[]>([]);
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState<EncodeStatus>("idle");
 
@@ -26,6 +27,11 @@ export function useFfmpeg() {
     if (ffmpegRef.current) return ffmpegRef.current;
     setStatus("loading");
     const ffmpeg = new FFmpeg();
+    // Keep the tail of ffmpeg's stderr; exec() doesn't surface the reason a failed encode died.
+    ffmpeg.on("log", ({ message }) => {
+      logRef.current.push(message);
+      if (logRef.current.length > 40) logRef.current.shift();
+    });
     ffmpeg.on("progress", ({ progress }) => setProgress(Math.min(1, Math.max(0, progress))));
     // ffmpeg-core.wasm is ~32 MB, over Cloudflare's 25 MiB static-asset limit, so load from a CDN.
     // ESM build (not UMD): Vite bundles ffmpeg's worker as a module worker, where only the ESM
@@ -61,6 +67,7 @@ export function useFfmpeg() {
         const ffmpeg = await ensureLoaded();
         setStatus("encoding");
         setProgress(0);
+        logRef.current = [];
         await resetFs(ffmpeg);
         await writeFrames(ffmpeg, files);
 
@@ -75,12 +82,13 @@ export function useFfmpeg() {
           await ffmpeg.writeFile(audioName, await fetchFile(audio));
           args.push("-i", audioName);
         }
-        // -b:v 0 puts libvpx in constant-quality (CRF) mode. yuva420p keeps the alpha channel
-        // so transparent PNG sequences stay transparent.
-        // -auto-alt-ref 0: libvpx defaults alt-ref frames on for VP9, but alt-ref frames can't
-        // carry alpha, so VP9 aborts with "Transparency encoding with auto_alt_ref does not
-        // work" unless we disable them. VP8's libvpx in this wasm core can't mux alpha
-        // (yuva420p aborts the core during finalization), so VP8 flattens to yuv420p.
+        // -b:v 0 puts libvpx in constant-quality (CRF) mode.
+        // VP8 (the default) reliably encodes long sequences but can't mux alpha in this wasm core
+        // (yuva420p aborts during finalization), so it flattens to yuv420p.
+        // VP9 keeps alpha (yuva420p) for transparent renders, but libvpx-vp9 in this core traps
+        // (wasm "memory access out of bounds") once a sequence exceeds ~16 frames — so VP9 is only
+        // usable for short clips. -auto-alt-ref 0 is required because alt-ref frames can't carry
+        // alpha (VP9 otherwise aborts with "Transparency encoding with auto_alt_ref does not work").
         args.push("-c:v", vcodec, "-crf", crf, "-b:v", "0");
         if (s.codec === "vp8") {
           args.push("-pix_fmt", "yuv420p");
@@ -95,9 +103,20 @@ export function useFfmpeg() {
         setStatus("idle");
         return new Blob([data as BlobPart], { type: "video/webm" });
       } catch (e) {
-        console.error("[webbit] encode failed:", e);
+        console.error("[webbit] encode failed:", e, logRef.current.join("\n"));
+        // A VP9 wasm trap leaves the worker corrupted; drop it so the next encode reloads a fresh core.
+        try {
+          ffmpegRef.current?.terminate();
+        } catch {
+          /* already gone */
+        }
+        ffmpegRef.current = null;
         setStatus("error");
-        throw e;
+        throw new Error(
+          s.codec === "vp9"
+            ? "Transparent (VP9) export failed — in-browser VP9 can't handle sequences beyond ~16 frames. Switch the Encoder to VP8 for longer clips (VP8 drops transparency)."
+            : "Encoding failed. Please try again.",
+        );
       }
     },
     [ensureLoaded, resetFs, writeFrames],
