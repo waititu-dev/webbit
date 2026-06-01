@@ -25,8 +25,8 @@ function chunk(type: string, data: Buffer): Buffer {
   return Buffer.concat([len, typeBuf, data, crc]);
 }
 
-// RGBA (color type 6) with a per-pixel alpha, so alpha < 255 genuinely
-// exercises the encoder's transparency path.
+// RGBA (color type 6) PNG fixture. VP8 output flattens alpha to opaque,
+// so the alpha byte is harmless filler — the RGB values are what matter.
 export function rgbaPng(size: number, rgba: [number, number, number, number]): Buffer {
   const sig = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
   const ihdr = Buffer.alloc(13);

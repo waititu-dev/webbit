@@ -33,7 +33,7 @@ async function serveLocalCore(page: Page) {
 
 const EBML = [0x1a, 0x45, 0xdf, 0xa3];
 
-// Distinct-ish semi-transparent (alpha 128) frames so the encoder exercises the alpha path.
+// Distinct-ish frames (RGB varies per frame) so the encoder sees real motion to compress.
 function makeFrames(size: number, count: number) {
   return Array.from({ length: count }, (_, i) => ({
     name: `frame_${String(i + 1).padStart(4, "0")}.png`,
